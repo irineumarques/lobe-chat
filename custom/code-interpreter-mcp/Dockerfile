@@ -13,10 +13,10 @@ RUN addgroup -g 1001 -S nodejs && \
 
 USER nodejs
 
-EXPOSE 3103
+EXPOSE 3104
 
 ENV NODE_ENV=production
-ENV PORT=3103
+ENV PORT=3104
 ENV HOST=0.0.0.0
 
 CMD ["node", "dist/index.js"]

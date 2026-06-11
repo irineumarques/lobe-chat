@@ -67,13 +67,26 @@ export const mcpServers = {
       'create_file',
     ],
   },
+  code_interpreter: {
+    name: 'Code Interpreter',
+    description: 'Execução de código Python e geração de PDFs com tipografia editorial',
+    url: process.env.CODE_INTERPRETER_MCP_URL || 'http://localhost:3104',
+    type: 'http' as const,
+    tools: [
+      'execute_python',
+      'generate_pdf',
+      'list_fonts',
+      'execute_stream',
+    ],
+  },
 } as const;
 
 // LobeChat plugin settings format
-// PLUGIN_SETTINGS=mcp-github:url=http://localhost:3100;mcp-postgres:url=http://localhost:3101;mcp-gitlab-ufal:url=http://localhost:3102
+// PLUGIN_SETTINGS=mcp-github:url=http://localhost:3100;mcp-postgres:url=http://localhost:3101;mcp-gitlab-ufal:url=http://localhost:3102;mcp-code-interpreter:url=http://localhost:3104
 
 export const mcpPluginSettings = [
   'mcp-github:url=http://localhost:3100',
   'mcp-postgres:url=http://localhost:3101',
   'mcp-gitlab-ufal:url=http://localhost:3102',
+  'mcp-code-interpreter:url=http://localhost:3104',
 ].join(',');

@@ -38,6 +38,9 @@ services:
       - REDIS_URL=redis://redis:6379
       - REDIS_PREFIX=mouseai
       - REDIS_TLS=0
+      # Market Service
+      - AGENTS_INDEX_URL=https://chat-agents.lobehub.com
+      - PLUGINS_INDEX_URL=https://chat-plugins.lobehub.com
       # AI Providers
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - ANTHROPIC_PROXY_URL=${ANTHROPIC_PROXY_URL:-https://api.aicortex.vip}
@@ -210,6 +213,126 @@ services:
       - SEARXNG_SECRET=${SEARXNG_SECRET}
     volumes:
       - ./docker/searxng-settings.yml:/etc/searxng/settings.yml:ro
+    restart: always
+    networks:
+      - mouseai-network
+
+  # ============================================
+  # Web Search Service (port 3103)
+  # ============================================
+  web-search:
+    build:
+      context: ./custom/web-search
+      dockerfile: Dockerfile
+    container_name: mouseai-web-search
+    ports:
+      - '3103:3103'
+    environment:
+      - SERPER_API_KEY=${SERPER_API_KEY}
+      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY}
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3103/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: always
+    networks:
+      - mouseai-network
+
+  # ============================================
+  # GitHub MCP Server (port 3100)
+  # ============================================
+  github-mcp:
+    build:
+      context: ./custom/mcp/github
+      dockerfile: Dockerfile
+    container_name: mouseai-github-mcp
+    ports:
+      - '3100:3100'
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3100/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: always
+    networks:
+      - mouseai-network
+
+  # ============================================
+  # PostgreSQL Readonly MCP Server (port 3101)
+  # ============================================
+  postgres-mcp:
+    build:
+      context: ./custom/mcp/postgres
+      dockerfile: Dockerfile
+    container_name: mouseai-postgres-mcp
+    ports:
+      - '3101:3101'
+    environment:
+      - POSTGRES_URL=${POSTGRES_READONLY_URL}
+      - MAX_ROWS=1000
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3101/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: always
+    networks:
+      - mouseai-network
+
+  # ============================================
+  # GitLab UFAL MCP Server (port 3102)
+  # ============================================
+  gitlab-ufal-mcp:
+    build:
+      context: ./custom/actions/gitlab-ufal
+      dockerfile: Dockerfile
+    container_name: mouseai-gitlab-ufal-mcp
+    ports:
+      - '3102:3102'
+    environment:
+      - GITLAB_UFAL_TOKEN=${GITLAB_UFAL_TOKEN}
+      - GITLAB_UFAL_BASE_URL=${GITLAB_UFAL_BASE_URL:-https://gitlab.ufal.br/api/v4}
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3102/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: always
+    networks:
+      - mouseai-network
+
+  # ============================================
+  # Code Interpreter MCP Server (port 3104)
+  # ============================================
+  code-interpreter-mcp:
+    build:
+      context: ./custom/code-interpreter-mcp
+      dockerfile: Dockerfile
+    container_name: mouseai-code-interpreter-mcp
+    ports:
+      - '3104:3104'
+    environment:
+      - CODE_INTERPRETER_URL=${CODE_INTERPRETER_API_URL:-http://code-interpreter:8080}
+      - CODE_INTERPRETER_API_KEY=${CODE_INTERPRETER_API_KEY:-iris-code-5c6f96e6fd08}
+    depends_on:
+      code-interpreter:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3104/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     restart: always
     networks:
       - mouseai-network

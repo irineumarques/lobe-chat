@@ -155,3 +155,24 @@ docs/superpowers/
 
 # Kagura agent runtime
 .kagura/
+
+# =============================================
+# MouseAI - Custom additions
+# =============================================
+
+# Docker data volumes
+data/postgres/
+data/redis/appendonlydir/
+data/minio/
+data/uploads/
+
+# Build artifacts for custom MCP servers
+custom/*/dist/
+custom/*/node_modules/
+custom/code-interpreter/__pycache__/
+custom/code-interpreter/*.pyc
+custom/code-interpreter/*.pyo
+
+# Deprecated scripts
+start.sh
+scripts/build-mcp.sh

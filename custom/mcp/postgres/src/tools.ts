@@ -1,6 +1,15 @@
 import { z } from 'zod';
 import pg from 'pg';
-import type { McpTool } from '@modelcontextprotocol/sdk/types.js';
+
+export interface Tool {
+  name: string;
+  description: string;
+  inputSchema: {
+    type: 'object';
+    properties: Record<string, unknown>;
+    required?: string[];
+  };
+}
 
 const { Pool } = pg;
 
@@ -62,7 +71,7 @@ export function validateQuery(query: string): { valid: boolean; error?: string }
 }
 
 // Tool definitions
-export const pgTools: McpTool[] = [
+export const pgTools: Tool[] = [
   {
     name: 'pg_list_tables',
     description: 'List all tables in a PostgreSQL schema',

@@ -1,41 +1,10 @@
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { toolDefinitions, handleToolCall } from './tools.js';
 
+const METHOD_TOOLS_LIST = 'tools/list';
+const METHOD_TOOLS_CALL = 'tools/call';
+
 const PORT = parseInt(process.env.PORT || '3100', 10);
-
-const server = new Server(
-  {
-    name: 'github-mcp-server',
-    version: '1.0.0',
-  },
-  {
-    capabilities: {
-      tools: {},
-    },
-  },
-);
-
-server.setRequestHandler({ method: 'tools/list' }, async () => ({
-  tools: toolDefinitions,
-}));
-
-server.setRequestHandler({ method: 'tools/call' }, async (request: any): Promise<CallToolResult> => {
-  const { name, arguments: args } = request.params;
-
-  try {
-    const result = await handleToolCall(name, args || {});
-    return {
-      content: [{ type: 'text', text: result }],
-    };
-  } catch (error: any) {
-    return {
-      content: [{ type: 'text', text: `Error: ${error.message}` }],
-      isError: true,
-    };
-  }
-});
 
 function parseJsonBody(req: IncomingMessage): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -65,7 +34,6 @@ function sendJson(res: ServerResponse, status: number, data: any): void {
 }
 
 const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
-  // CORS preflight
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
@@ -84,7 +52,11 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
 
   try {
     if (req.method === 'GET') {
-      sendJson(res, 200, { status: 'ok', server: 'github-mcp-server', version: '1.0.0' });
+      if (req.url === '/health') {
+        sendJson(res, 200, { status: 'ok', service: 'mouseai-github-mcp' });
+      } else {
+        sendJson(res, 200, { status: 'ok', server: 'mouseai-github-mcp', version: '1.0.0' });
+      }
       return;
     }
 
@@ -97,27 +69,32 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
         result: {
           protocolVersion: '2024-11-05',
           capabilities: { tools: {} },
-          serverInfo: { name: 'github-mcp-server', version: '1.0.0' },
+          serverInfo: { name: 'mouseai-github-mcp', version: '1.0.0' },
         },
       });
       return;
     }
 
-    if (data.method === 'tools/list') {
-      const result = await server.requestHandler.handleRequest(
-        { method: 'tools/list', jsonrpc: '2.0', id: data.id ?? 1 } as any,
-        {} as any,
-      );
-      sendJson(res, 200, result);
+    if (data.method === METHOD_TOOLS_LIST) {
+      const response = await Promise.resolve({ tools: toolDefinitions });
+      sendJson(res, 200, {
+        jsonrpc: '2.0',
+        id: data.id ?? null,
+        result: response,
+      });
       return;
     }
 
-    if (data.method === 'tools/call') {
-      const result = await server.requestHandler.handleRequest(
-        { method: 'tools/call', params: data.params, jsonrpc: '2.0', id: data.id ?? 1 } as any,
-        {} as any,
-      );
-      sendJson(res, 200, result);
+    if (data.method === METHOD_TOOLS_CALL) {
+      const { name, arguments: args = {} } = data.params ?? {};
+      const result = await handleToolCall(name, args);
+      sendJson(res, 200, {
+        jsonrpc: '2.0',
+        id: data.id ?? null,
+        result: {
+          content: [{ type: 'text', text: result }],
+        },
+      });
       return;
     }
 
@@ -128,6 +105,6 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
 });
 
 httpServer.listen(PORT, () => {
-  console.log(`GitHub MCP Server listening on http://localhost:${PORT}`);
-  console.log(`Available tools: ${toolDefinitions.map((t) => t.name).join(', ')}`);
+  console.log(`[GitHub-MCP] Server listening on http://localhost:${PORT}`);
+  console.log(`[GitHub-MCP] Available tools: ${toolDefinitions.map((t) => t.name).join(', ')}`);
 });

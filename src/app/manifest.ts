@@ -1,10 +1,12 @@
 import { type MetadataRoute } from 'next';
 
+const MOUSEAI_COLOR = '#6366f1';
+
 const manifest = async (): Promise<MetadataRoute.Manifest> => {
   // Skip heavy module compilation in development
   if (process.env.NODE_ENV === 'development') {
     return {
-      background_color: '#000000',
+      background_color: MOUSEAI_COLOR,
       description: 'MouseAI Development',
       display: 'standalone',
       icons: [
@@ -17,7 +19,7 @@ const manifest = async (): Promise<MetadataRoute.Manifest> => {
       name: 'MouseAI',
       short_name: 'MouseAI',
       start_url: '/',
-      theme_color: '#000000',
+      theme_color: MOUSEAI_COLOR,
     };
   }
 
@@ -30,6 +32,7 @@ const manifest = async (): Promise<MetadataRoute.Manifest> => {
 
   // @ts-expect-error - manifestModule.generate returns extended manifest with custom properties
   return manifestModule.generate({
+    color: MOUSEAI_COLOR,
     description: `${BRANDING_NAME} is a work-and-lifestyle space to find, build, and collaborate with agent teams that grow with you.`,
     icons: [
       {

@@ -1,16 +1,16 @@
 # MouseAI
 
-**MouseAI** é uma plataforma de chat com IA, baseada no [LobeChat](https://github.com/lobehub/lobe-chat), com suporte a múltiplos provedores de IA, ferramentas MCP, interpretador de código, e integração com GitLab UFAL.
+**MouseAI** é uma plataforma de chat com IA, baseada no [LobeChat](https://github.com/lobehub/lobe-chat), com suporte a múltiplos provedores de IA, ferramentas MCP, interpretador de código com geração de PDFs editoriais, e integração com GitLab UFAL.
 
 ## Funcionalidades
 
 - **Multi-Provider AI**: Suporte a Anthropic (Claude), DeepSeek, OpenAI e outros
-- **MCP Servers**: Integração com GitHub, PostgreSQL e ferramentas customizadas
-- **Code Interpreter**: Execução de código Python com renderização de PDFs
-- **GitLab UFAL**: Integração direta com o GitLab da UFAL
+- **MCP Servers**: Integração com GitHub, PostgreSQL readonly, GitLab UFAL e Code Interpreter
+- **Code Interpreter**: Execução de código Python com renderização de PDFs usando WeasyPrint e fontes editoriais (EB Garamond, Cormorant Garamond, Cinzel)
+- **GitLab UFAL**: Integração direta com o GitLab da Universidade Federal de Alagoas (12 ferramentas)
 - **Web Search**: Busca na web via Serper e scraping via Firecrawl
 - **Branding Customizado**: Interface adaptada para MouseAI com suporte a pt-BR
-- **SSE Heartbeat**: Mantém conexões longas ativas com heartbeats de 15s
+- **SSE Heartbeat**: Mantém conexões longas ativas com heartbeats de 30s para prevenir timeouts
 
 ## Quick Start
 
@@ -31,10 +31,16 @@ nano .env
 ### 2. Iniciar com Docker Compose
 
 ```bash
+# Copie o arquivo de exemplo
+cp .env.example .env
+
+# Edite o .env com suas credenciais
+nano .env
+
 # Iniciar todos os serviços
 docker compose up -d
 
-# Com MCP servers adicionais
+# Com MCP servers adicionais (GitHub, PostgreSQL, GitLab UFAL, Code Interpreter)
 docker compose -f docker-compose.yml -f docker-compose.mcp.yml up -d
 
 # Ver logs
@@ -57,25 +63,30 @@ mouseai/
 ├── custom/                    # Código customizado MouseAI
 │   ├── mcp/                  # MCP Servers
 │   │   ├── github/           # GitHub MCP (9 tools)
-│   │   └── postgres/         # PostgreSQL readonly MCP (4 tools)
-│   ├── actions/ # Actions customizadas
-│   │   └── gitlab-ufal/     # GitLab UFAL MCP (12 tools)
-│   ├── code-interpreter/     # Code interpreter Python
-│   └── web-search/          # Serper + Firecrawl service
+│   │   ├── postgres/         # PostgreSQL readonly MCP (4 tools)
+│   │   └── code-interpreter-mcp/  # Code Interpreter MCP (4 tools)
+│   ├── actions/              # Actions customizadas
+│   │   └── gitlab-ufal/      # GitLab UFAL MCP (12 tools)
+│   ├── code-interpreter/     # Code interpreter Python (FastAPI)
+│   │   └── src/main.py       # Server com /execute, /generate-pdf, /generate-pdf-file
+│   └── web-search/           # Serper + Firecrawl service
 ├── docker/                   # Configurações Docker
 │   ├── scripts/             # Scripts de inicialização
 │   └── searxng-settings.yml
-├── data/ # Dados persistentes
+├── scripts/                 # Scripts auxiliares (deprecated)
+├── data/                     # Dados persistentes
 │   ├── postgres/            # Banco PostgreSQL
-│   ├── redis/               # Cache Redis
-│   ├── minio/ # Object storage
+│   ├── redis/                # Cache Redis
+│   ├── minio/               # Object storage
 │   └── uploads/             # Uploads de arquivos
 ├── packages/               # Pacotes LobeChat (customizados)
-│   └── model-runtime/
-│       └── src/utils/heartbeat.ts  # SSE heartbeat
+├── public/
+│   └── logo-mouseai.svg     # Logo MouseAI
+├── locales/
+│   └── pt-BR/              # Traduções em Português (Brasil)
 ├── docker-compose.yml      # Orquestração principal
 ├── docker-compose.mcp.yml  # Override para MCP servers
-└── .env.example           # Variáveis de ambiente
+└── .env.example            # Variáveis de ambiente
 ```
 
 ## Provedores de IA
@@ -111,13 +122,31 @@ Validação: Apenas queries SELECT, máximo 1000 linhas por query.
 
 Ferramentas: `list_projects`, `get_repo`, `list_branches`, `list_commits`, `get_issues`, `create_issue`, `get_MRs`, `create_MR`, `list_pipelines`, `list_members`, `get_file_content`, `create_file`
 
+### Code Interpreter MCP (porta 3104)
+
+Ferramentas: `execute_python`, `generate_pdf`, `list_fonts`, `execute_stream`
+
 ## Code Interpreter
 
 Executa código Python em sandbox isolado com:
-- Pacotes pré-instalados (numpy, pandas, matplotlib, etc.)
+- Pacotes pré-instalados (numpy, pandas, matplotlib, seaborn, etc.)
 - Renderização de PDFs com WeasyPrint
 - Fontes tipográficas editoriais (EB Garamond, Cormorant Garamond, Cinzel)
 - Isolamento de execução por sessão
+- Geração de PDFs com tipografia editorial:
+
+```python
+# Exemplo de geração de PDF via MCP
+{
+  "tool": "generate_pdf",
+  "arguments": {
+    "content": "# Meu Relatório\n\nEste é um relatório editorial...",
+    "title": "Relatório 2024",
+    "format": "markdown",
+    "font_family": "EB Garamond"
+  }
+}
+```
 
 ## Web Search
 
@@ -136,34 +165,29 @@ Consulte `.env.example` para todas as variáveis disponíveis.
 - `ANTHROPIC_API_KEY` - Chave da API Anthropic
 - `DEEPSEEK_API_KEY` - Chave da API DeepSeek
 
-## Desenvolvimento
+## Arquitetura
 
-```bash
-# Instalar dependências
-bun install
-
-# Desenvolvimento SPA (frontend)
-bun run dev:spa
-
-# Desenvolvimento full-stack
-bun run dev
-
-# Build para produção
-bun run build
 ```
-
-## Deploy
-
-```bash
-# Deploy básico
-docker compose up -d
-
-# Deploy com MCP servers
-docker compose -f docker-compose.yml -f docker-compose.mcp.yml up -d
-
-# Rebuild dos serviços
-docker compose build
-docker compose up -d
+┌─────────────────────────────────────────────────────────────┐
+│                    LobeChat (MouseAI)                        │
+│                   http://localhost:3210                       │
+└──────┬────────────┬─────────────┬──────────────┬─────────────┘
+       │            │             │              │
+   ┌───▼────┐  ┌──▼────┐  ┌──▼─────────┐  ┌──▼────────────┐
+   │PostgreSQL│  │ Redis │  │  MinIO S3   │  │  SearXNG       │
+   │:5432    │  │:6379  │  │  :9000      │  │  :8081         │
+   └─────────┘  └───────┘  └────────────┘  └───────────────┘
+                      │
+              ┌───────▼───────┐
+              │ Code Interpreter│
+              │   :8080        │
+              │ (Python FastAPI)│
+              └───────────────┘
+       ┌────────┬────────┬──────────┐
+    ┌──▼──┐┌──▼───┐┌──▼──────┐┌──▼──────────┐
+    │GitHub││Postgres││GitLab UFAL││Code Interp MCP│
+    │:3100││:3101  ││  :3102   ││   :3104      │
+    └─────┘└───────┘└──────────┘└──────────────┘
 ```
 
 ## License

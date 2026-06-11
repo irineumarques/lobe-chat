@@ -3,15 +3,22 @@
  * Implements GitLab API v4 as MCP tools
  */
 
-import { McpTool } from '@modelcontextprotocol/sdk/types.js';
+export interface Tool {
+  name: string;
+  description: string;
+  inputSchema: {
+    type: 'object';
+    properties: Record<string, unknown>;
+    required?: string[];
+  };
+}
 
 export const GITLAB_PORT = parseInt(process.env.GITLAB_PORT || '3102', 10);
 export const GITLAB_TOKEN = process.env.GITLAB_UFAL_TOKEN || '';
 export const GITLAB_BASE_URL = process.env.GITLAB_UFAL_BASE_URL || 'https://gitlab.ufal.br/api/v4';
 
 if (!GITLAB_TOKEN) {
-  console.error('GITLAB_UFAL_TOKEN environment variable is required');
-  process.exit(1);
+  console.warn('WARNING: GITLAB_UFAL_TOKEN environment variable is not set. GitLab tools will not work.');
 }
 
 // HTTP client
@@ -35,7 +42,7 @@ async function gitlabRequest<T>(path: string, options: RequestInit = {}): Promis
 }
 
 // Tool definitions
-export const gitlabTools: McpTool[] = [
+export const gitlabTools: Tool[] = [
   {
     name: 'list_projects',
     description: 'Lista todos os projetos acessíveis no GitLab UFAL. Use o parâmetro search para filtrar por nome.',
@@ -250,7 +257,7 @@ async function handleCreateIssue(args: {
   description?: string;
   labels?: string;
 }) {
-  const body: Record<string, unknown> = { title };
+  const body: Record<string, unknown> = { title: args.title };
   if (args.description) body.description = args.description;
   if (args.labels) body.labels = args.labels;
 
@@ -281,7 +288,7 @@ async function handleCreateMR(args: {
   const body: Record<string, unknown> = {
     source_branch: args.source_branch,
     target_branch: args.target_branch || 'main',
-    title,
+    title: args.title,
   };
   if (args.description) body.description = args.description;
 

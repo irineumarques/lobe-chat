@@ -22,6 +22,15 @@ from pathlib import Path
 from typing import Any, AsyncGenerator
 
 import boto3
+import io
+
+# PDF generation with WeasyPrint
+try:
+    from weasyprint import HTML
+    WEASYPRINT_AVAILABLE = True
+except ImportError:
+    WEASYPRINT_AVAILABLE = False
+    HTML = None
 import redis.asyncio as redis
 from botocore.config import Config as BotoConfig
 from fastapi import FastAPI, HTTPException, Request, status
@@ -87,6 +96,29 @@ class ExecutionResponse(BaseModel):
     stderr: str
     execution_time: float
     artifacts: list[dict[str, Any]]
+
+
+class PDFGenerationRequest(BaseModel):
+    content: str
+    title: str | None = None
+    format: str = 'html'  # 'html' or 'markdown'
+    font_family: str = 'EB Garamond'
+    font_size: int = 11
+    page_size: str = 'A4'
+    margin_top: float = 2.5
+    margin_bottom: float = 2.5
+    margin_left: float = 2.5
+    margin_right: float = 2.5
+    base_url: str | None = None
+
+
+class PDFGenerationResponse(BaseModel):
+    success: bool
+    file_id: str
+    file_name: str
+    file_size: int
+    download_url: str
+    content_type: str = 'application/pdf'
 
 
 def validate_code(code: str) -> tuple[bool, str]:
@@ -177,6 +209,229 @@ async def execute_python(code: str, timeout: int, session_id: str) -> tuple[str,
             return '', f'Execution error: {str(e)}', execution_time
 
 
+async def generate_pdf(
+    content: str,
+    title: str | None,
+    font_family: str,
+    font_size: int,
+    page_size: str,
+    margin_top: float,
+    margin_bottom: float,
+    margin_left: float,
+    margin_right: float,
+    content_format: str = 'html',
+) -> tuple[bytes, str]:
+    """Convert HTML/Markdown content to PDF using WeasyPrint."""
+
+    # Convert markdown to HTML if needed
+    if content_format == 'markdown':
+        try:
+            import markdown
+            content = markdown.markdown(
+                content,
+                extensions=['tables', 'fenced_code', 'codehilite', 'toc'],
+                extension_configs={
+                    'toc': {'title': 'Table of Contents'},
+                }
+            )
+        except ImportError:
+            # Fallback: try mistune
+            try:
+                import mistune
+                md = mistune.create_markdown(plugins=['table'])
+                content = md(content)
+            except ImportError:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail='Markdown library not available. Please use HTML content.',
+                )
+
+    # Check if WeasyPrint is available
+    if not WEASYPRINT_AVAILABLE or HTML is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail='WeasyPrint is not available in this environment',
+        )
+
+    # Default CSS for editorial typography
+    default_css = f'''
+    @font-face {{
+        font-family: 'EB Garamond';
+        src: url('https://raw.githubusercontent.com/google/fonts/main/ofl/ebgaramond/EBGaramond-Regular.ttf');
+        font-weight: normal;
+        font-style: normal;
+    }}
+    @font-face {{
+        font-family: 'EB Garamond';
+        src: url('https://raw.githubusercontent.com/google/fonts/main/ofl/ebgaramond/EBGaramond-Italic.ttf');
+        font-weight: normal;
+        font-style: italic;
+    }}
+    @font-face {{
+        font-family: 'EB Garamond';
+        src: url('https://raw.githubusercontent.com/google/fonts/main/ofl/ebgaramond/EBGaramond-Bold.ttf');
+        font-weight: bold;
+        font-style: normal;
+    }}
+    @font-face {{
+        font-family: 'Cormorant Garamond';
+        src: url('https://raw.githubusercontent.com/google/fonts/main/ofl/cormorantgaramond/Cormorant-Regular.ttf');
+        font-weight: normal;
+        font-style: normal;
+    }}
+    @font-face {{
+        font-family: 'Cinzel';
+        src: url('https://raw.githubusercontent.com/google/fonts/main/ofl/cinzel/Cinzel-Regular.ttf');
+        font-weight: normal;
+        font-style: normal;
+    }}
+
+    :root {{
+        --font-body: '{font_family}', 'EB Garamond', Georgia, serif;
+        --font-heading: 'Cormorant Garamond', 'EB Garamond', Georgia, serif;
+        --font-title: 'Cinzel', 'EB Garamond', Georgia, serif;
+    }}
+
+    body {{
+        font-family: var(--font-body);
+        font-size: {font_size}pt;
+        line-height: 1.6;
+        color: #1a1a1a;
+        margin: 0;
+        padding: 0;
+    }}
+
+    h1 {{
+        font-family: var(--font-title);
+        font-size: 18pt;
+        font-weight: bold;
+        color: #1e1b4b;
+        border-bottom: 2px solid #6366f1;
+        padding-bottom: 8px;
+        margin-bottom: 16px;
+        text-align: center;
+    }}
+
+    h2 {{
+        font-family: var(--font-heading);
+        font-size: 14pt;
+        font-weight: bold;
+        color: #3730a3;
+        margin-top: 24px;
+        margin-bottom: 12px;
+    }}
+
+    h3 {{
+        font-family: var(--font-heading);
+        font-size: 12pt;
+        font-weight: bold;
+        color: #4338ca;
+        margin-top: 18px;
+        margin-bottom: 8px;
+    }}
+
+    p {{
+        text-align: justify;
+        margin-bottom: 12px;
+        orphans: 3;
+        widows: 3;
+    }}
+
+    code, pre {{
+        font-family: 'Courier New', monospace;
+        font-size: 9pt;
+        background-color: #f5f5f5;
+        padding: 2px 6px;
+        border-radius: 3px;
+    }}
+
+    pre {{
+        background-color: #f0f0f0;
+        padding: 12px;
+        overflow: auto;
+        page-break-inside: avoid;
+    }}
+
+    blockquote {{
+        border-left: 4px solid #6366f1;
+        padding-left: 16px;
+        margin-left: 0;
+        color: #4b5563;
+        font-style: italic;
+    }}
+
+    table {{
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 16px;
+    }}
+
+    th {{
+        background-color: #6366f1;
+        color: white;
+        padding: 8px;
+        text-align: left;
+    }}
+
+    td {{
+        padding: 6px 8px;
+        border-bottom: 1px solid #e5e7eb;
+    }}
+
+    tr:nth-child(even) {{
+        background-color: #f9fafb;
+    }}
+
+    img {{
+        max-width: 100%;
+        height: auto;
+    }}
+
+    a {{
+        color: #6366f1;
+    }}
+
+    ul, ol {{
+        margin-bottom: 12px;
+    }}
+
+    li {{
+        margin-bottom: 4px;
+    }}
+
+    hr {{
+        border: none;
+        border-top: 1px solid #e5e7eb;
+        margin: 20px 0;
+    }}
+    '''
+
+    # Wrap content in full HTML document
+    title_text = title or 'Document'
+    html_content = f'''<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>{title_text}</title>
+</head>
+<body>
+{content}
+</body>
+</html>'''
+
+    # Generate PDF with WeasyPrint
+    html_obj = HTML(string=html_content)
+    pdf_bytes = html_obj.write_pdf(
+        stylesheets=[
+            HTML(string=f'<style>{default_css}</style>'),
+        ],
+        presentational_hints=True,
+    )
+
+    file_name = f"{title or 'document'}.pdf"
+    return pdf_bytes, file_name
+
+
 async def upload_artifact(file_path: Path, session_id: str) -> dict[str, Any] | None:
     """Upload a file artifact to S3."""
     try:
@@ -192,6 +447,34 @@ async def upload_artifact(file_path: Path, session_id: str) -> dict[str, Any] | 
     except Exception as e:
         logger.error(f'Failed to upload artifact: {e}')
         return None
+
+
+async def upload_pdf(pdf_bytes: bytes, file_name: str) -> dict[str, Any]:
+    """Upload PDF to S3 and return download info."""
+    try:
+        file_id = str(uuid.uuid4())
+        key = f'pdfs/{file_id}/{file_name}'
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=key,
+            Body=pdf_bytes,
+            ContentType='application/pdf',
+        )
+        url = f'{S3_ENDPOINT}/{S3_BUCKET}/{key}'
+        return {
+            'success': True,
+            'file_id': file_id,
+            'file_name': file_name,
+            'file_size': len(pdf_bytes),
+            'download_url': url,
+            'content_type': 'application/pdf',
+        }
+    except Exception as e:
+        logger.error(f'Failed to upload PDF: {e}')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f'Failed to upload PDF: {str(e)}',
+        )
 
 
 @asynccontextmanager
@@ -309,6 +592,112 @@ async def execute_stream(req: Request) -> JSONResponse:
         ],
         'execution_time': execution_time,
     })
+
+
+@app.post('/generate-pdf', response_model=PDFGenerationResponse)
+async def generate_pdf_endpoint(req: PDFGenerationRequest) -> PDFGenerationResponse:
+    """
+    Generate PDF from HTML or Markdown content using WeasyPrint.
+
+    Supports editorial typography with:
+    - EB Garamond, Cormorant Garamond, Cinzel fonts
+    - A4 page size with configurable margins
+    - Automatic styling for headings, tables, code blocks
+    """
+    logger.info(f'Generating PDF: title={req.title}, font={req.font_family}')
+
+    try:
+        pdf_bytes, file_name = await generate_pdf(
+            content=req.content,
+            title=req.title,
+            font_family=req.font_family,
+            font_size=req.font_size,
+            page_size=req.page_size,
+            margin_top=req.margin_top,
+            margin_bottom=req.margin_bottom,
+            margin_left=req.margin_left,
+            margin_right=req.margin_right,
+            content_format=req.format,
+        )
+
+        result = await upload_pdf(pdf_bytes, file_name)
+        return PDFGenerationResponse(**result)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f'PDF generation failed: {e}')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f'PDF generation failed: {str(e)}',
+        )
+
+
+@app.post('/generate-pdf-file')
+async def generate_pdf_file(req: PDFGenerationRequest) -> JSONResponse:
+    """
+    Generate PDF and return as base64 encoded data (for small files).
+    Falls back to S3 upload for large files.
+    """
+    logger.info(f'Generating PDF (inline): title={req.title}')
+
+    try:
+        pdf_bytes, file_name = await generate_pdf(
+            content=req.content,
+            title=req.title,
+            font_family=req.font_family,
+            font_size=req.font_size,
+            page_size=req.page_size,
+            margin_top=req.margin_top,
+            margin_bottom=req.margin_bottom,
+            margin_left=req.margin_left,
+            margin_right=req.margin_right,
+            content_format=req.format,
+        )
+
+        # If PDF is smaller than 5MB, return as base64
+        if len(pdf_bytes) < 5 * 1024 * 1024:
+            import base64
+            b64 = base64.b64encode(pdf_bytes).decode('utf-8')
+            return JSONResponse({
+                'success': True,
+                'file_name': file_name,
+                'file_size': len(pdf_bytes),
+                'data': b64,
+                'content_type': 'application/pdf',
+                'encoding': 'base64',
+            })
+
+        # For larger files, upload to S3
+        result = await upload_pdf(pdf_bytes, file_name)
+        return JSONResponse(result)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f'PDF generation failed: {e}')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f'PDF generation failed: {str(e)}',
+        )
+
+
+@app.get('/fonts')
+async def list_fonts() -> JSONResponse:
+    """List available fonts in the environment."""
+    fonts = {
+        'system': [
+            'EB Garamond',
+            'Cormorant Garamond',
+            'Cinzel',
+            'Liberation Serif',
+            'DejaVu Serif',
+            'Georgia',
+            'Times New Roman',
+        ],
+        'weasyprint_available': WEASYPRINT_AVAILABLE,
+    }
+    return JSONResponse(fonts)
 
 
 if __name__ == '__main__':

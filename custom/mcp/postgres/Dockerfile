@@ -4,15 +4,14 @@ WORKDIR /app
 
 # Install dependencies
 COPY package.json tsconfig.json ./
-RUN npm install && npm run build
-
-# Copy source
 COPY src/ ./src/
+RUN npm install && npm run build
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 && \
-    chown -R nodejs:nodejs /app
+    chown -R nodejs:nodejs /app && \
+    apk add --no-cache curl
 
 USER nodejs
 

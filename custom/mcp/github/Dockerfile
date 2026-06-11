@@ -15,10 +15,12 @@ COPY src/ ./src/
 RUN npm run build
 
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
+RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001 && \
+    chown -R nodejs:nodejs /app && \
+    apk add --no-cache curl
+
 USER nodejs
 
-# Expose port
 EXPOSE 3100
 
 # Health check

@@ -1,25 +1,19 @@
 /**
- * MouseAI - PostgreSQL MCP Server (Read-only)
- * Implements MCP as JSON-RPC over plain HTTP
+ * MouseAI - Code Interpreter MCP Server
+ * Implements code execution and PDF generation as MCP tools over HTTP
  */
 
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
-import { createToolHandlers, pgTools, getPool, PG_PORT } from './tools.js';
+import { createToolHandlers, codeInterpreterTools, CODE_INTERPRETER_PORT } from './tools.js';
 
 const METHOD_TOOLS_LIST = 'tools/list';
 const METHOD_TOOLS_CALL = 'tools/call';
 
-const POSTGRES_URL = process.env.POSTGRES_URL;
-if (!POSTGRES_URL) {
-  console.error('POSTGRES_URL environment variable is required');
-  process.exit(1);
-}
-
-// Create PostgreSQL connection pool
-const pool = getPool(POSTGRES_URL);
+const CODE_INTERPRETER_URL = process.env.CODE_INTERPRETER_URL || 'http://localhost:8080';
+const API_KEY = process.env.CODE_INTERPRETER_API_KEY || 'iris-code-5c6f96e6fd08';
 
 // Create tool handlers
-const handlers = createToolHandlers(pool);
+const handlers = createToolHandlers(CODE_INTERPRETER_URL, API_KEY);
 
 function parseJsonBody(req: IncomingMessage): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -61,17 +55,18 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
 
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'ok', service: 'mouseai-postgres-mcp' }));
+    res.end(JSON.stringify({ status: 'ok', service: 'mouseai-code-interpreter-mcp' }));
     return;
   }
 
   if (req.url === '/') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
-      name: 'mouseai-postgres-mcp',
+      name: 'mouseai-code-interpreter-mcp',
       version: '1.0.0',
       status: 'running',
-      tools: pgTools.map(t => t.name),
+      tools: codeInterpreterTools.map(t => t.name),
+      codeInterpreterUrl: CODE_INTERPRETER_URL,
     }));
     return;
   }
@@ -92,7 +87,7 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
         result: {
           protocolVersion: '2024-11-05',
           capabilities: { tools: {} },
-          serverInfo: { name: 'mouseai-postgres-mcp', version: '1.0.0' },
+          serverInfo: { name: 'mouseai-code-interpreter-mcp', version: '1.0.0' },
         },
       });
       return;
@@ -102,7 +97,7 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
       sendJson(res, 200, {
         jsonrpc: '2.0',
         id: data.id ?? null,
-        result: { tools: pgTools },
+        result: { tools: codeInterpreterTools },
       });
       return;
     }
@@ -134,19 +129,19 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
 
     sendJson(res, 404, { error: 'Method not found' });
   } catch (error) {
-    console.error('[PG-MCP] Error:', error);
+    console.error('[CodeInterpreter-MCP] Error:', error);
     sendJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
   }
 });
 
-httpServer.listen(PG_PORT, '0.0.0.0', () => {
-  console.log(`[PG-MCP] Server running on http://0.0.0.0:${PG_PORT}`);
-  console.log(`[PG-MCP] PostgreSQL: ${POSTGRES_URL.split('@')[1]}`);
+httpServer.listen(CODE_INTERPRETER_PORT, '0.0.0.0', () => {
+  console.log(`[CodeInterpreter-MCP] Server running on http://0.0.0.0:${CODE_INTERPRETER_PORT}`);
+  console.log(`[CodeInterpreter-MCP] Code Interpreter URL: ${CODE_INTERPRETER_URL}`);
+  console.log(`[CodeInterpreter-MCP] Available tools: ${codeInterpreterTools.map(t => t.name).join(', ')}`);
 });
 
-process.on('SIGINT', async () => {
-  console.log('[PG-MCP] Shutting down...');
-  await pool.end();
+process.on('SIGINT', () => {
+  console.log('[CodeInterpreter-MCP] Shutting down...');
   httpServer.close();
   process.exit(0);
 });
