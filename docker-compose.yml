@@ -1,0 +1,243 @@
+name: mouseai
+services:
+  # ============================================
+  # LobeChat Application
+  # ============================================
+  lobe:
+    image: lobehub/lobehub:latest
+    container_name: mouseai-lobe
+    ports:
+      - '${LOBE_PORT:-3210}:3210'
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - KEY_VAULTS_SECRET=${KEY_VAULTS_SECRET}
+      - AUTH_SECRET=${AUTH_SECRET}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}
+      - INTERNAL_APP_URL=http://localhost:${LOBE_PORT:-3210}
+      - APP_URL=${APP_URL:-http://localhost:${LOBE_PORT:-3210}}
+      # S3 / MinIO
+      - S3_ENDPOINT=${S3_ENDPOINT:-http://minio:9000}
+      - S3_BUCKET=${S3_BUCKET:-mouseai}
+      - S3_REGION=${S3_REGION:-us-east-1}
+      - S3_ENABLE_PATH_STYLE=1
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-GKminioadmin0000}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-minioadminsecret}
+      - S3_SET_ACL=0
+      # Redis
+      - REDIS_URL=redis://redis:6379
+      - REDIS_PREFIX=mouseai
+      - REDIS_TLS=0
+      # AI Providers
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_PROXY_URL=${ANTHROPIC_PROXY_URL:-https://api.aicortex.vip}
+      - ANTHROPIC_CLIENT_TIMEOUT=${ANTHROPIC_CLIENT_TIMEOUT:-295000}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - DEEPSEEK_PROXY_URL=${DEEPSEEK_PROXY_URL:-https://api.deepseek.com/v1}
+      # Vision
+      - LLM_VISION_IMAGE_USE_BASE64=1
+      # MCP
+      - MCP_TOOL_TIMEOUT=${MCP_TOOL_TIMEOUT:-60000}
+      # Web Search
+      - SERPER_API_KEY=${SERPER_API_KEY}
+      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY}
+      # Code Interpreter
+      - CODE_INTERPRETER_API_KEY=${CODE_INTERPRETER_API_KEY}
+      - CODE_INTERPRETER_API_URL=${CODE_INTERPRETER_API_URL:-http://code-interpreter:8080}
+    env_file:
+      - .env
+    volumes:
+      - ./data/uploads:/app/data/uploads
+      - ./logs:/app/logs
+    restart: always
+    networks:
+      - mouseai-network
+
+  # ============================================
+  # PostgreSQL Database
+  # ============================================
+  postgresql:
+    image: postgres:16-alpine
+    container_name: mouseai-postgres
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${LOBE_DB_NAME:-mouseai}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./docker/scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres} -d ${LOBE_DB_NAME:-mouseai}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: always
+    networks:
+      - mouseai-network
+
+  # ============================================
+  # Redis Cache
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: mouseai-redis
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    command: >
+      redis-server
+      --save 300 1
+      --save 60 100
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - ./data/redis:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+    networks:
+      - mouseai-network
+
+  # ============================================
+  # MinIO Object Storage (S3-compatible)
+  # ============================================
+  minio:
+    image: minio/minio:latest
+    container_name: mouseai-minio
+    ports:
+      - '${MINIO_PORT:-9000}:9000'
+      - '${MINIO_CONSOLE_PORT:-9001}:9001'
+    environment:
+      - MINIO_ROOT_USER=${S3_ACCESS_KEY_ID:-GKminioadmin0000}
+      - MINIO_ROOT_PASSWORD=${S3_SECRET_ACCESS_KEY:-minioadminsecret}
+      - MINIO_DEFAULT_BUCKETS=${S3_BUCKET:-mouseai}
+    volumes:
+      - ./data/minio:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+    networks:
+      - mouseai-network
+
+  # ============================================
+  # MinIO Init (create buckets on startup)
+  # ============================================
+  minio-init:
+    image: minio/mc:latest
+    container_name: mouseai-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc alias set local http://minio:9000 ${S3_ACCESS_KEY_ID:-GKminioadmin0000} ${S3_SECRET_ACCESS_KEY:-minioadminsecret};
+      mc mb local/${S3_BUCKET:-mouseai} --ignore-existing;
+      mc anonymous set download local/${S3_BUCKET:-mouseai};
+      exit 0;
+      "
+    networks:
+      - mouseai-network
+
+  # ============================================
+  # Code Interpreter Service
+  # ============================================
+  code-interpreter:
+    build:
+      context: ./custom/code-interpreter
+      dockerfile: Dockerfile
+    container_name: mouseai-code-interpreter
+    ports:
+      - '${CODE_INTERPRETER_PORT:-8080}:8080'
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY_ID:-GKminioadmin0000}
+      - S3_SECRET_KEY=${S3_SECRET_ACCESS_KEY:-minioadminsecret}
+      - S3_BUCKET=${S3_BUCKET:-mouseai}
+      - API_KEY=${CODE_INTERPRETER_API_KEY:-iris-code-5c6f96e6fd08}
+      - PYTHON_PATH=/usr/bin/python3
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./data/uploads:/app/uploads
+      - ./logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8080/health']
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    networks:
+      - mouseai-network
+
+  # ============================================
+  # SearXNG Web Search
+  # ============================================
+  searxng:
+    image: ghcr.io/searxng/searxng:latest
+    container_name: mouseai-searxng
+    ports:
+      - '${SEARXNG_PORT:-8080}:8080'
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:${SEARXNG_PORT:-8080}/
+      - SEARXNG_SECRET=${SEARXNG_SECRET}
+    volumes:
+      - ./docker/searxng-settings.yml:/etc/searxng/settings.yml:ro
+    restart: always
+    networks:
+      - mouseai-network
+
+# ============================================
+# Volumes
+# ============================================
+volumes:
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/postgres
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/redis
+  minio_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/minio
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  mouseai-network:
+    driver: bridge
+    name: mouseai-network
