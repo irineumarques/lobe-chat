@@ -56,6 +56,23 @@ services:
     networks:
       - mouseai-network
 
+# ============================================
+  # Web Search Service (port 3103)
+  # ============================================
+  web-search:
+    build:
+      context: ./custom/web-search
+      dockerfile: Dockerfile
+    container_name: mouseai-web-search
+    ports:
+      - '3103:3103'
+    environment:
+      - SERPER_API_KEY=${SERPER_API_KEY}
+      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY}
+    restart: always
+    networks:
+      - mouseai-network
+
 networks:
   mouseai-network:
     name: mouseai-network
