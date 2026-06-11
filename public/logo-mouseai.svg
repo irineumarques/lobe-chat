@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="url(#grad1)"/>
+  <!-- Mouse body -->
+  <ellipse cx="256" cy="290" rx="110" ry="100" fill="white"/>
+  <!-- Left ear -->
+  <circle cx="190" cy="185" r="55" fill="white"/>
+  <circle cx="190" cy="185" r="35" fill="#c4b5fd"/>
+  <!-- Right ear -->
+  <circle cx="322" cy="185" r="55" fill="white"/>
+  <circle cx="322" cy="185" r="35" fill="#c4b5fd"/>
+  <!-- Left eye -->
+  <circle cx="225" cy="270" r="18" fill="#1e1b4b"/>
+  <circle cx="220" cy="264" r="6" fill="white"/>
+  <!-- Right eye -->
+  <circle cx="287" cy="270" r="18" fill="#1e1b4b"/>
+  <circle cx="282" cy="264" r="6" fill="white"/>
+  <!-- Nose -->
+  <ellipse cx="256" cy="310" rx="20" ry="12" fill="#fca5a5"/>
+  <!-- Smile -->
+  <path d="M240 330 Q256 345 272 330" stroke="#1e1b4b" stroke-width="4" stroke-linecap="round" fill="none"/>
+  <!-- AI circuit marks on cheeks -->
+  <circle cx="195" cy="305" r="4" fill="#a5b4fc"/>
+  <circle cx="185" cy="315" r="3" fill="#a5b4fc"/>
+  <circle cx="205" cy="315" r="3" fill="#a5b4fc"/>
+  <circle cx="317" cy="305" r="4" fill="#a5b4fc"/>
+  <circle cx="307" cy="315" r="3" fill="#a5b4fc"/>
+  <circle cx="327" cy="315" r="3" fill="#a5b4fc"/>
+</svg>
