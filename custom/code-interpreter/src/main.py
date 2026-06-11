@@ -249,10 +249,6 @@ async def health_check() -> JSONResponse:
 @app.post('/execute', response_model=ExecutionResponse)
 async def execute_code(req: ExecutionRequest) -> ExecutionResponse:
     """Execute code and return results."""
-    # Validate API key
-    if req.code.startswith('# DEBUG'):
-        pass  # Allow debug mode without key
-
     # Validate code
     valid, error_msg = validate_code(req.code)
     if not valid:
@@ -277,7 +273,10 @@ async def execute_code(req: ExecutionRequest) -> ExecutionResponse:
             detail=f'Unsupported language: {req.language}',
         )
 
-    success = stderr == '' or 'warning' not in stderr.lower()
+    success = stderr == '' or not any(
+        keyword in stderr.lower()
+        for keyword in ('error', 'exception', 'traceback', 'failed')
+    )
 
     return ExecutionResponse(
         session_id=session_id,
