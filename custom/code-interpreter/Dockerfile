@@ -21,31 +21,35 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Image processing
     libjpeg62-turbo-dev libpng-dev libtiff-dev libopenjp2-7 \
     libfreetype6-dev liblcms2-dev libwebp-dev \
-    # Font utilities
-    fontconfig fonts-liberation \
+    # Base fonts + EB Garamond from Debian
+    fontconfig fonts-liberation fonts-dejavu-core fonts-ebgaramond \
     # Misc
-    curl wget ca-certificates unzip \
+    curl ca-certificates unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # ============================================
-# Install Editorial Fonts:
-# - EB Garamond (Google Fonts)
-# - Cormorant Garamond (Google Fonts)
-# - Cinzel (Google Fonts)
+# Install Cormorant Garamond + Cinzel from GitHub google-fonts mirror
 # ============================================
 RUN mkdir -p /usr/share/fonts/truetype/editorial && \
-    # EB Garamond
-    wget -q "https://fonts.google.com/download?family=EB+Garamond" -O /tmp/eb-garamond.zip && \
-    unzip -o /tmp/eb-garamond.zip -d /usr/share/fonts/truetype/editorial/ && \
-    # Cormorant Garamond
-    wget -q "https://fonts.google.com/download?family=Cormorant+Garamond" -O /tmp/cormorant.zip && \
-    unzip -o /tmp/cormorant.zip -d /usr/share/fonts/truetype/editorial/ && \
+    # Cormorant Garamond (Regular = 400)
+    curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/cormorantgaramond/Cormorant-Regular.ttf" \
+        -o /usr/share/fonts/truetype/editorial/Cormorant-Regular.ttf && \
+    curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/cormorantgaramond/Cormorant-Medium.ttf" \
+        -o /usr/share/fonts/truetype/editorial/Cormorant-Medium.ttf && \
+    curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/cormorantgaramond/Cormorant-SemiBold.ttf" \
+        -o /usr/share/fonts/truetype/editorial/Cormorant-SemiBold.ttf && \
+    curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/cormorantgaramond/Cormorant-Bold.ttf" \
+        -o /usr/share/fonts/truetype/editorial/Cormorant-Bold.ttf && \
+    curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/cormorantgaramond/Cormorant-Italic.ttf" \
+        -o /usr/share/fonts/truetype/editorial/Cormorant-Italic.ttf && \
     # Cinzel
-    wget -q "https://fonts.google.com/download?family=Cinzel" -O /tmp/cinzel.zip && \
-    unzip -o /tmp/cinzel.zip -d /usr/share/fonts/truetype/editorial/ && \
-    # Clean up and rebuild font cache
-    rm -f /tmp/*.zip && \
-    fc-cache -f -v
+    curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/cinzel/Cinzel-Regular.ttf" \
+        -o /usr/share/fonts/truetype/editorial/Cinzel-Regular.ttf && \
+    curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/cinzel/Cinzel-SemiBold.ttf" \
+        -o /usr/share/fonts/truetype/editorial/Cinzel-SemiBold.ttf && \
+    curl -sL "https://raw.githubusercontent.com/google/fonts/main/ofl/cinzel/Cinzel-Bold.ttf" \
+        -o /usr/share/fonts/truetype/editorial/Cinzel-Bold.ttf && \
+    fc-cache -f
 
 # ============================================
 # Python dependencies
