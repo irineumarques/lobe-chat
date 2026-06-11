@@ -1,0 +1,78 @@
+# MouseAI MCP Servers - Docker Compose Override
+# Use this file to add MCP servers to the main docker-compose.yml
+# Usage: docker compose -f docker-compose.yml -f docker-compose.mcp.yml up -d
+
+services:
+  # ============================================
+  # GitHub MCP Server (port 3100)
+  # ============================================
+  github-mcp:
+    build:
+      context: ./custom/mcp/github
+      dockerfile: Dockerfile
+    container_name: mouseai-github-mcp
+    ports:
+      - '3100:3100'
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+    restart: always
+    networks:
+      - mouseai-network
+
+  # ============================================
+  # PostgreSQL Readonly MCP Server (port 3101)
+  # ============================================
+  postgres-mcp:
+    build:
+      context: ./custom/mcp/postgres
+      dockerfile: Dockerfile
+    container_name: mouseai-postgres-mcp
+    ports:
+      - '3101:3101'
+    environment:
+      - POSTGRES_URL=${POSTGRES_READONLY_URL}
+      - MAX_ROWS=1000
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    restart: always
+    networks:
+      - mouseai-network
+
+  # ============================================
+  # GitLab UFAL MCP Server (port 3102)
+  # ============================================
+  gitlab-ufal-mcp:
+    build:
+      context: ./custom/actions/gitlab-ufal
+      dockerfile: Dockerfile
+    container_name: mouseai-gitlab-ufal-mcp
+    ports:
+      - '3102:3102'
+    environment:
+      - GITLAB_UFAL_TOKEN=${GITLAB_UFAL_TOKEN}
+      - GITLAB_UFAL_BASE_URL=${GITLAB_UFAL_BASE_URL:-https://gitlab.ufal.br/api/v4}
+    restart: always
+    networks:
+      - mouseai-network
+
+# ============================================
+  # Web Search Service (port 3103)
+  # ============================================
+  web-search:
+    build:
+      context: ./custom/web-search
+      dockerfile: Dockerfile
+    container_name: mouseai-web-search
+    ports:
+      - '3103:3103'
+    environment:
+      - SERPER_API_KEY=${SERPER_API_KEY}
+      - FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY}
+    restart: always
+    networks:
+      - mouseai-network
+
+networks:
+  mouseai-network:
+    name: mouseai-network

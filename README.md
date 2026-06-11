@@ -10,12 +10,17 @@
 - **GitLab UFAL**: Integração direta com o GitLab da UFAL
 - **Web Search**: Busca na web via Serper e scraping via Firecrawl
 - **Branding Customizado**: Interface adaptada para MouseAI com suporte a pt-BR
+- **SSE Heartbeat**: Mantém conexões longas ativas com heartbeats de 15s
 
 ## Quick Start
 
 ### 1. Configuração
 
 ```bash
+# Clone o repositório
+git clone https://github.com/irineumarques/lobe-chat.git
+cd lobe-chat
+
 # Copie o arquivo de exemplo
 cp .env.example .env
 
@@ -29,6 +34,9 @@ nano .env
 # Iniciar todos os serviços
 docker compose up -d
 
+# Com MCP servers adicionais
+docker compose -f docker-compose.yml -f docker-compose.mcp.yml up -d
+
 # Ver logs
 docker compose logs -f
 
@@ -40,30 +48,34 @@ docker compose down
 
 - **MouseAI**: http://localhost:3210
 - **MinIO Console**: http://localhost:9001
-- **SearXNG** (busca): http://localhost:8080
+- **SearXNG** (busca): http://localhost:8081
 
 ## Estrutura do Projeto
 
 ```
 mouseai/
-├── custom/                    # Código customizado
-│   ├── mcp/                    # MCP Servers customizados
-│   │   ├── github/            # GitHub MCP adapter
-│   │   └── postgres/          # PostgreSQL readonly MCP
-│   ├── actions/               # Actions customizadas
-│   │   └── gitlab-ufal/      # GitLab UFAL integration
-│   └── code-interpreter/      # Code interpreter service
-├── docker/                    # Configurações Docker
-│   ├── scripts/               # Scripts de inicialização
-│   └── searxng-settings.yml  # Configuração SearXNG
-├── data/                     # Dados persistentes
-│   ├── postgres/              # Banco PostgreSQL
-│   ├── redis/                # Cache Redis
-│   ├── minio/                # Object storage
-│   └── uploads/              # Uploads de arquivos
-├── logs/                     # Logs da aplicação
-├── docker-compose.yml        # Orquestração de serviços
-└── .env.example              # Exemplo de variáveis de ambiente
+├── custom/                    # Código customizado MouseAI
+│   ├── mcp/                  # MCP Servers
+│   │   ├── github/           # GitHub MCP (9 tools)
+│   │   └── postgres/         # PostgreSQL readonly MCP (4 tools)
+│   ├── actions/ # Actions customizadas
+│   │   └── gitlab-ufal/     # GitLab UFAL MCP (12 tools)
+│   ├── code-interpreter/     # Code interpreter Python
+│   └── web-search/          # Serper + Firecrawl service
+├── docker/                   # Configurações Docker
+│   ├── scripts/             # Scripts de inicialização
+│   └── searxng-settings.yml
+├── data/ # Dados persistentes
+│   ├── postgres/            # Banco PostgreSQL
+│   ├── redis/               # Cache Redis
+│   ├── minio/ # Object storage
+│   └── uploads/             # Uploads de arquivos
+├── packages/               # Pacotes LobeChat (customizados)
+│   └── model-runtime/
+│       └── src/utils/heartbeat.ts  # SSE heartbeat
+├── docker-compose.yml      # Orquestração principal
+├── docker-compose.mcp.yml  # Override para MCP servers
+└── .env.example           # Variáveis de ambiente
 ```
 
 ## Provedores de IA
@@ -73,6 +85,7 @@ mouseai/
 ```env
 ANTHROPIC_API_KEY=your_key
 ANTHROPIC_PROXY_URL=https://api.aicortex.vip
+ANTHROPIC_CLIENT_TIMEOUT=295000
 ```
 
 ### DeepSeek
@@ -84,22 +97,19 @@ DEEPSEEK_PROXY_URL=https://api.deepseek.com/v1
 
 ## MCP Servers
 
-### GitHub
+### GitHub MCP (porta 3100)
 
-Ferramentas disponíveis:
-- `list_repos` - Lista repositórios do usuário
-- `get_issues` - Lista issues de um repositório
-- `get_prs` - Lista pull requests
-- `create_issue` - Cria uma nova issue
-- `create_pr` - Cria um pull request
-- `get_commits` - Lista commits
-- `get_branches` - Lista branches
-- `get_file_content` - Lê conteúdo de arquivo
-- `search_code` - Busca código
+Ferramentas: `list_repos`, `get_issues`, `get_prs`, `create_issue`, `create_pr`, `get_commits`, `get_branches`, `get_file_content`, `search_code`
 
-### PostgreSQL (Readonly)
+### PostgreSQL Readonly MCP (porta 3101)
 
-Executa queries SELECT em um banco de dados readonly.
+Ferramentas: `pg_list_tables`, `pg_describe_table`, `pg_execute_query`, `pg_get_schema`
+
+Validação: Apenas queries SELECT, máximo 1000 linhas por query.
+
+### GitLab UFAL MCP (porta 3102)
+
+Ferramentas: `list_projects`, `get_repo`, `list_branches`, `list_commits`, `get_issues`, `create_issue`, `get_MRs`, `create_MR`, `list_pipelines`, `list_members`, `get_file_content`, `create_file`
 
 ## Code Interpreter
 
@@ -109,18 +119,10 @@ Executa código Python em sandbox isolado com:
 - Fontes tipográficas editoriais (EB Garamond, Cormorant Garamond, Cinzel)
 - Isolamento de execução por sessão
 
-## GitLab UFAL
+## Web Search
 
-Integração direta com o GitLab institucional:
-
-- `list_projects` - Lista projetos
-- `get_repo` - Detalhes de repositório
-- `list_branches` - Lista branches
-- `list_commits` - Lista commits
-- `get_issues` / `create_issue` - Issues
-- `get_MRs` / `create_MR` - Merge requests
-- `list_pipelines` - Pipelines CI/CD
-- `list_members` - Membros do projeto
+- **Serper**: Busca Google para consultas web
+- **Firecrawl**: Scraping de páginas com conversão para markdown
 
 ## Variáveis de Ambiente
 
@@ -128,8 +130,8 @@ Consulte `.env.example` para todas as variáveis disponíveis.
 
 ### Obrigatórias
 
-- `KEY_VAULTS_SECRET` - Chave para criptografia (gere com `openssl rand -base64 32`)
-- `AUTH_SECRET` - Chave de autenticação (gere com `openssl rand -base64 32`)
+- `KEY_VAULTS_SECRET` - Chave para criptografia (`openssl rand -base64 32`)
+- `AUTH_SECRET` - Chave de autenticação (`openssl rand -base64 32`)
 - `POSTGRES_PASSWORD` - Senha do PostgreSQL
 - `ANTHROPIC_API_KEY` - Chave da API Anthropic
 - `DEEPSEEK_API_KEY` - Chave da API DeepSeek
@@ -137,10 +139,6 @@ Consulte `.env.example` para todas as variáveis disponíveis.
 ## Desenvolvimento
 
 ```bash
-# Clonar o repositório
-git clone https://github.com/irineumarques/lobe-chat.git
-cd lobe-chat
-
 # Instalar dependências
 bun install
 
@@ -149,13 +147,24 @@ bun run dev:spa
 
 # Desenvolvimento full-stack
 bun run dev
+
+# Build para produção
+bun run build
 ```
 
-## Documentação
+## Deploy
 
-- [LobeChat Docs](https://lobehub.com/docs)
-- [MCP Protocol](https://modelcontextprotocol.io)
-- [SearXNG](https://docs.searxng.org)
+```bash
+# Deploy básico
+docker compose up -d
+
+# Deploy com MCP servers
+docker compose -f docker-compose.yml -f docker-compose.mcp.yml up -d
+
+# Rebuild dos serviços
+docker compose build
+docker compose up -d
+```
 
 ## License
 

@@ -1,6 +1,7 @@
 import { type ChatCompletionErrorPayload } from '@lobechat/model-runtime';
 import { AGENT_RUNTIME_ERROR_SET } from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
+import { wrapResponseWithHeartbeat } from '@lobechat/model-runtime/utils/heartbeat';
 
 import { checkAuth } from '@/app/(backend)/middleware/auth';
 import { createTraceOptions, initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
@@ -35,11 +36,14 @@ export const POST = checkAuth(async (req: Request, { params, userId, serverDB })
       traceOptions = createTraceOptions(data, { provider, trace: tracePayload });
     }
 
-    return await modelRuntime.chat(data, {
+    const response = await modelRuntime.chat(data, {
       user: userId,
       ...traceOptions,
       signal: req.signal,
     });
+
+    // Wrap with heartbeat to prevent proxy timeouts on long-running streams
+    return wrapResponseWithHeartbeat(response);
   } catch (e) {
     const {
       errorType = ChatErrorType.InternalServerError,
