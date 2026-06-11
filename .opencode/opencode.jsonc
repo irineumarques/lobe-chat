@@ -4,6 +4,33 @@
     "CLAUDE.md",
     "AGENTS.md"
   ],
+  "skills": [
+    {
+      "name": "vps-port-forwarding",
+      "description": "Port forwarding SSH para acessar MouseAI na VPS",
+      "location": ".opencode/skills/vps-port-forwarding/skill.md"
+    },
+    {
+      "name": "mcp-config",
+      "description": "Como configurar MCPs no LobeChat (GitHub, PostgreSQL, GitLab, Code Interpreter)",
+      "location": ".opencode/skills/mcp-config/skill.md"
+    },
+    {
+      "name": "github-mcp",
+      "description": "Como usar o GitHub MCP para analisar repositórios no chat",
+      "location": ".opencode/skills/github-mcp/skill.md"
+    },
+    {
+      "name": "ai-performance",
+      "description": "Boas práticas de prompts e performance de código",
+      "location": ".opencode/skills/ai-performance/skill.md"
+    },
+    {
+      "name": "project-overview",
+      "description": "Visão geral da arquitetura, estrutura e serviços do MouseAI",
+      "location": ".opencode/skills/project-overview/skill.md"
+    }
+  ],
   "permission": {
     "bash": {
       "*": "allow",
