@@ -1,0 +1,744 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "GitLab UFAL API v4",
+    "description": "API REST do GitLab UFAL para acessar projetos, arquivos, issues, merge requests, pipelines e membros. Usa Personal Access Token via header PRIVATE-TOKEN.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://gitlab.ufal.br/api/v4",
+      "description": "Servidor principal do GitLab UFAL"
+    }
+  ],
+  "security": [
+    {
+      "GitLabToken": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "GitLabToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "PRIVATE-TOKEN",
+        "description": "Personal Access Token do GitLab. Crie em: https://gitlab.ufal.br/-/user_settings/personal_access_tokens"
+      }
+    },
+    "schemas": {
+      "Project": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "description": "ID do projeto" },
+          "name": { "type": "string", "description": "Nome do projeto" },
+          "path_with_namespace": { "type": "string", "description": "Caminho completo (ex: grupo/subgrupo/projeto)" },
+          "description": { "type": "string", "description": "Descrição do projeto" },
+          "web_url": { "type": "string", "description": "URL web do projeto" },
+          "default_branch": { "type": "string", "description": "Branch padrão" },
+          "visibility": { "type": "string", "description": "Visibilidade: private, internal, public" },
+          "last_activity_at": { "type": "string", "description": "Data da última atividade" }
+        }
+      },
+      "TreeNode": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "description": "ID do nó" },
+          "name": { "type": "string", "description": "Nome do arquivo/diretório" },
+          "type": { "type": "string", "description": "Tipo: tree (diretório) ou blob (arquivo)" },
+          "path": { "type": "string", "description": "Caminho completo" },
+          "mode": { "type": "string", "description": "Permissões" }
+        }
+      },
+      "Issue": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "iid": { "type": "integer", "description": "ID interno do projeto" },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "state": { "type": "string", "description": "opened ou closed" },
+          "labels": { "type": "array", "items": { "type": "string" } },
+          "web_url": { "type": "string" },
+          "created_at": { "type": "string" },
+          "updated_at": { "type": "string" }
+        }
+      },
+      "MergeRequest": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "iid": { "type": "integer" },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "state": { "type": "string", "description": "opened, closed, merged, locked" },
+          "source_branch": { "type": "string" },
+          "target_branch": { "type": "string" },
+          "web_url": { "type": "string" },
+          "created_at": { "type": "string" },
+          "updated_at": { "type": "string" }
+        }
+      },
+      "Pipeline": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "status": { "type": "string", "description": "running, pending, success, failed, canceled, skipped" },
+          "ref": { "type": "string", "description": "Branch ou tag" },
+          "sha": { "type": "string" },
+          "web_url": { "type": "string" },
+          "created_at": { "type": "string" },
+          "updated_at": { "type": "string" }
+        }
+      },
+      "Member": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "username": { "type": "string" },
+          "name": { "type": "string" },
+          "access_level": { "type": "integer", "description": "10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner" },
+          "state": { "type": "string" }
+        }
+      },
+      "Branch": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "default": { "type": "boolean" },
+          "web_url": { "type": "string" }
+        }
+      },
+      "Commit": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "message": { "type": "string" },
+          "author_name": { "type": "string" },
+          "committed_date": { "type": "string" },
+          "web_url": { "type": "string" }
+        }
+      },
+      "FileContent": {
+        "type": "object",
+        "properties": {
+          "file_name": { "type": "string" },
+          "file_path": { "type": "string" },
+          "size": { "type": "integer" },
+          "encoding": { "type": "string", "description": "base64" },
+          "content": { "type": "string", "description": "Conteúdo codificado em base64" },
+          "ref": { "type": "string" },
+          "blob_id": { "type": "string" },
+          "commit_id": { "type": "string" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/projects": {
+      "get": {
+        "operationId": "gitlab_list_projects",
+        "summary": "Listar projetos",
+        "description": "Lista todos os projetos acessíveis ao token configurado. Use o parâmetro 'search' para filtrar por nome.",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "Buscar projetos pelo nome (busca parcial, case-insensitive)",
+            "schema": { "type": "string" },
+            "example": "meu-projeto"
+          },
+          {
+            "name": "membership",
+            "in": "query",
+            "required": false,
+            "description": "Se true, lista apenas projetos onde o usuário autenticado é membro",
+            "schema": { "type": "boolean" }
+          },
+          {
+            "name": "owned",
+            "in": "query",
+            "required": false,
+            "description": "Se true, lista apenas projetos owned pelo usuário autenticado",
+            "schema": { "type": "boolean" }
+          },
+          {
+            "name": "starred",
+            "in": "query",
+            "required": false,
+            "description": "Se true, lista apenas projetos com estrela",
+            "schema": { "type": "boolean" }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "description": "Itens por página (máximo 100)",
+            "schema": { "type": "integer", "default": 20, "maximum": 100 }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Número da página",
+            "schema": { "type": "integer", "default": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de projetos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Project" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}": {
+      "get": {
+        "operationId": "gitlab_get_project",
+        "summary": "Detalhes de um projeto",
+        "description": "Retorna os detalhes de um projeto específico. O ID pode ser o ID numérico ou o path URL-encoded (ex: grupo%2Fprojeto).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID numérico do projeto ou caminho URL-encoded (ex: 42 ou grupo%2Fprojeto)",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detalhes do projeto",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Project" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/repository/branches": {
+      "get": {
+        "operationId": "gitlab_list_branches",
+        "summary": "Listar branches",
+        "description": "Lista as branches de um projeto.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID numérico do projeto ou caminho URL-encoded",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "Filtrar branches pelo nome",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de branches",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Branch" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/repository/tree": {
+      "get": {
+        "operationId": "gitlab_list_repository_tree",
+        "summary": "Listar arquivos do repositório",
+        "description": "Lista os arquivos e diretórios de um caminho no repositório. Útil para explorar a estrutura do projeto.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID numérico do projeto ou caminho URL-encoded",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": false,
+            "description": "Caminho dentro do repositório. Vazio = raiz. Ex: src/components",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "ref",
+            "in": "query",
+            "required": false,
+            "description": "Branch ou tag. Padrão: branch padrão do projeto",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "recursive",
+            "in": "query",
+            "required": false,
+            "description": "Se true, lista todos os arquivos recursivamente. Cuidado em projetos grandes.",
+            "schema": { "type": "boolean" }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "description": "Itens por página (máximo 100)",
+            "schema": { "type": "integer", "default": 20, "maximum": 100 }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Número da página",
+            "schema": { "type": "integer", "default": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de arquivos e diretórios",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/TreeNode" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/repository/files/{file_path}": {
+      "get": {
+        "operationId": "gitlab_get_file",
+        "summary": "Obter metadados e conteúdo de um arquivo",
+        "description": "Retorna os metadados e o conteúdo (em base64) de um arquivo. O file_path deve ser URL-encoded (ex: src%2Fmain%2Findex.js).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID numérico do projeto ou caminho URL-encoded",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "file_path",
+            "in": "path",
+            "required": true,
+            "description": "Caminho do arquivo URL-encoded (ex: src%2Fmain.py)",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "ref",
+            "in": "query",
+            "required": true,
+            "description": "Branch ou tag (ex: main, develop)",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Conteúdo e metadados do arquivo",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FileContent" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/repository/files/{file_path}/raw": {
+      "get": {
+        "operationId": "gitlab_get_raw_file",
+        "summary": "Ler conteúdo bruto de um arquivo",
+        "description": "Retorna o conteúdo bruto (texto) de um arquivo, sem encoding base64. Ideal para ler código-fonte. O file_path deve ser URL-encoded (ex: src%2Fmain.py).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID numérico do projeto ou caminho URL-encoded",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "file_path",
+            "in": "path",
+            "required": true,
+            "description": "Caminho do arquivo URL-encoded (ex: src%2Fmain.py)",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "ref",
+            "in": "query",
+            "required": true,
+            "description": "Branch ou tag (ex: main, develop)",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Conteúdo bruto do arquivo",
+            "content": {
+              "text/plain": {
+                "schema": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/repository/commits": {
+      "get": {
+        "operationId": "gitlab_list_commits",
+        "summary": "Listar commits recentes",
+        "description": "Lista os commits mais recentes de um projeto ou branch.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID numérico do projeto ou caminho URL-encoded",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "ref_name",
+            "in": "query",
+            "required": false,
+            "description": "Branch ou tag. Padrão: branch padrão",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "description": "Itens por página",
+            "schema": { "type": "integer", "default": 20, "maximum": 100 }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Número da página",
+            "schema": { "type": "integer", "default": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de commits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Commit" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/issues": {
+      "get": {
+        "operationId": "gitlab_list_issues",
+        "summary": "Listar issues",
+        "description": "Lista as issues de um projeto. Permite filtrar por estado, buscar por texto e filtrar por labels.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID numérico do projeto ou caminho URL-encoded",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "description": "Estado: opened, closed ou all",
+            "schema": {
+              "type": "string",
+              "enum": ["opened", "closed", "all"],
+              "default": "opened"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "Buscar no título e descrição das issues",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "labels",
+            "in": "query",
+            "required": false,
+            "description": "Filtrar por labels (separadas por vírgula). Ex: bug,critical",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "description": "Itens por página (máximo 100)",
+            "schema": { "type": "integer", "default": 20, "maximum": 100 }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Número da página",
+            "schema": { "type": "integer", "default": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de issues",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Issue" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/issues/{issue_iid}": {
+      "get": {
+        "operationId": "gitlab_get_issue",
+        "summary": "Detalhes de uma issue",
+        "description": "Retorna os detalhes de uma issue específica pelo IID (ID interno do projeto, visível na URL).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID numérico do projeto ou caminho URL-encoded",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "issue_iid",
+            "in": "path",
+            "required": true,
+            "description": "IID da issue (número visível na interface, ex: #42)",
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detalhes da issue",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Issue" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/merge_requests": {
+      "get": {
+        "operationId": "gitlab_list_merge_requests",
+        "summary": "Listar merge requests",
+        "description": "Lista as merge requests de um projeto. Permite filtrar por estado.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID numérico do projeto ou caminho URL-encoded",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "description": "Estado: opened, closed, merged, locked ou all",
+            "schema": {
+              "type": "string",
+              "enum": ["opened", "closed", "merged", "locked", "all"],
+              "default": "opened"
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "description": "Itens por página (máximo 100)",
+            "schema": { "type": "integer", "default": 20, "maximum": 100 }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Número da página",
+            "schema": { "type": "integer", "default": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de merge requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/MergeRequest" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/merge_requests/{mr_iid}": {
+      "get": {
+        "operationId": "gitlab_get_merge_request",
+        "summary": "Detalhes de um merge request",
+        "description": "Retorna os detalhes de um merge request pelo IID (número visível na URL, ex: !42).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID numérico do projeto ou caminho URL-encoded",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "mr_iid",
+            "in": "path",
+            "required": true,
+            "description": "IID do merge request (número visível na interface, ex: !42)",
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detalhes do merge request",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MergeRequest" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/pipelines": {
+      "get": {
+        "operationId": "gitlab_list_pipelines",
+        "summary": "Listar pipelines",
+        "description": "Lista as pipelines de CI/CD de um projeto. Permite filtrar por status.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID numérico do projeto ou caminho URL-encoded",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Status: running, pending, success, failed, canceled, skipped",
+            "schema": {
+              "type": "string",
+              "enum": ["running", "pending", "success", "failed", "canceled", "skipped"]
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "description": "Itens por página (máximo 100)",
+            "schema": { "type": "integer", "default": 20, "maximum": 100 }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Número da página",
+            "schema": { "type": "integer", "default": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de pipelines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Pipeline" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{id}/members": {
+      "get": {
+        "operationId": "gitlab_list_members",
+        "summary": "Listar membros do projeto",
+        "description": "Lista os membros de um projeto com seus níveis de acesso.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "ID numérico do projeto ou caminho URL-encoded",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "description": "Itens por página (máximo 100)",
+            "schema": { "type": "integer", "default": 20, "maximum": 100 }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Número da página",
+            "schema": { "type": "integer", "default": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de membros",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Member" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
